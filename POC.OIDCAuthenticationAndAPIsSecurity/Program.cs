@@ -2,6 +2,7 @@
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,10 +42,17 @@ builder.Services.AddAuthorization(opts =>
     opts.AddPolicy("ApiScope", policy =>
         policy.RequireAssertion(ctx =>
             ctx.User?.Claims.Any(c => (c.Type == "scope" || c.Type == "scp") &&
-                                      c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                                       .Contains(requiredScope)) == true));
-});
+                                      c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries) 
+                                      
+                                      .Contains(requiredScope)) == true));
 
+    opts.AddPolicy("RequireAdminRole", p => p.RequireRole("admin"));
+    
+    opts.AddPolicy("RequireApiReadScope", p => p.RequireAssertion(ctx =>
+        ctx.User.Claims.Any(c =>
+            (c.Type == "scope" || c.Type == "scp") &&
+            c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("api.read"))));
+});
 
 
 // ---- Swagger with OAuth2 (implicit Device/PKCE flow for testing) ----
@@ -71,10 +79,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-
-
 var app = builder.Build();
-
 
 
 // Configure the HTTP request pipeline.
@@ -87,6 +92,7 @@ if (app.Environment.IsDevelopment())
 
 // Unprotected
 app.MapGet("/", () => new { service = "OIDC Protected API", timeUtc = DateTime.UtcNow });
+
 
 // Protected by Bearer token + required scope
 app.MapGet("/profile", (HttpContext http) =>
@@ -104,7 +110,51 @@ app.MapGet("/profile", (HttpContext http) =>
         claims = user.Claims.Select(c => new { c.Type, c.Value })
     };
 })
+
 .RequireAuthorization("ApiScope");
+
+// Protected with role based authorization. 
+app.MapGet("/admin/metrics", () => "ok").RequireAuthorization("RequireAdminRole");
+app.MapGet("/reports", () => "ok").RequireAuthorization("RequireApiReadScope");
+
+// ----------------------------------
+
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "OIDC Protected API", Version = "v1" });
+
+// Lets you sign in in Swagger UI and call protected endpoints with the acquired access token.
+    c.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.OAuth2,
+        Flows = new OpenApiOAuthFlows
+        {
+            AuthorizationCode = new OpenApiOAuthFlow
+            {
+                AuthorizationUrl = new Uri($"{authority}/oauth2/v2.0/authorize"), // adjust per IdP
+                TokenUrl = new Uri($"{authority}/oauth2/v2.0/token"),             // adjust per IdP
+                Scopes = new Dictionary<string, string> { { requiredScope, "API read access" } }
+            }
+        }
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
+            { Type = ReferenceType.SecurityScheme, Id = "oauth2" }
+        }] = new[] { requiredScope }
+    });
+});
+
+app.UseSwaggerUI(o =>
+{
+    o.OAuthClientId(builder.Configuration["SwaggerOAuth:ClientId"]);   // public SPA/PKCE client
+    o.OAuthUsePkce();
+    o.OAuthScopeSeparator(" ");
+});
+
+// ----------------------------------
 
 app.UseHttpsRedirection();
 app.MapControllers();
@@ -116,3 +166,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.Run();
+
+
+
