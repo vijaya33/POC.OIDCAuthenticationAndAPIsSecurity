@@ -1,9 +1,13 @@
-// these two references are manually added here and in the .csproj file. 
+// These two references are manually added here and in the .csproj file. 
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Net.NetworkInformation;
 
+//--------------------------------------------------------------
+
+//--------------------------------------------------------------    
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +15,15 @@ var builder = WebApplication.CreateBuilder(args);
 var authority = builder.Configuration["Auth:Authority"]; // e.g., https://login.microsoftonline.com/{tenantId}/v2.0
 var audience = builder.Configuration["Auth:Audience"];  // e.g., api://{app-client-id} or your API's Application ID URI
 var requiredScope = builder.Configuration["Auth:RequiredScope"] ?? "api.read";
+
+// ======= Read config =======
+var tenant = builder.Configuration["Auth:Tenant"];                 // contoso
+var tenantDomain = builder.Configuration["Auth:TenantWithDomain"];      // contoso.onmicrosoft.com
+var signInPolicy = builder.Configuration["Auth:SignInPolicy"];          // B2C_1_signupsignin
+var authorityBaseFormat = builder.Configuration["Auth:AuthorityBase"]
+                          ?? "https://{0}.b2clogin.com/{1}";
+var authorityWithSampleTenant = string.Format(authorityBaseFormat, tenant, $"{tenantDomain}/{signInPolicy}/v2.0");
+
 
 // Add services to the container.
 
