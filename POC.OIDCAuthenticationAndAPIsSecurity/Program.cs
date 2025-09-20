@@ -1,3 +1,5 @@
+#region namespaces
+
 // These two references are manually added here and in the .csproj file. 
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -5,10 +7,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Net.NetworkInformation;
 
-//--------------------------------------------------------------
+#endregion namespaces
 
-//--------------------------------------------------------------    
-
+#region builder code. 
 var builder = WebApplication.CreateBuilder(args);
 
 // ---- Configure from appsettings or environment ----
@@ -92,6 +93,41 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+#region AddSwaggerGen() method with B2C, OAuth2 - Authorization Code + PKCE... 
+// ---------------------------------------
+// ======= Swagger (OAuth2 – Authorization Code + PKCE) =======
+
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "B2C OIDC PRotected API", Version = "v1" });
+
+    // OAuth2 definition for Swagger UI (Auth Code + PKCE) 
+    c.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.OAuth2,
+        Flows = new OpenApiOAuthFlows
+        {
+            AuthorizationCode = new OpenApiOAuthFlow
+            {
+                AuthorizationUrl = new Uri(
+                    $"https://{tenant}.b2clogin.com/{tenantDomain}/{signInPolicy}/oauth2/v2.0/authorize"),
+                TokenUrl = new Uri(
+                    $"https://{tenant}.b2clogin.com/{tenantDomain}/{signInPolicy}/oauth2/v2.0/token"),
+                Scopes = new Dictionary<string, string>
+                {
+                    { requiredScope, "API read access" }
+                }
+            }
+        }
+    });
+});
+
+// ---------------------------------------
+
+#endregion
+
+#endregion builder code.
+#region app. 
 var app = builder.Build();
 
 
@@ -179,6 +215,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.Run();
+
+#endregion app. 
+
 
 
 
