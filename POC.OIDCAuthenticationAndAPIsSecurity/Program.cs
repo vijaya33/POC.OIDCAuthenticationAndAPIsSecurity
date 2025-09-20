@@ -136,11 +136,41 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+}   
 
 
 // Unprotected
 app.MapGet("/", () => new { service = "OIDC Protected API", timeUtc = DateTime.UtcNow });
+
+// ----------------------------------
+
+
+// ======= Sample endpoints =======
+
+// Scope-                                   
+app.MapGet("/reports", (HttpContext ctx) =>
+{
+    var name = ctx.User.Identity?.Name ?? ctx.User.FindFirst("sub")?.Value ?? "unknown";
+    return new { message = $"Hello {name}, you have {requiredScope} scope." };
+})
+.RequireAuthorization("RequireApiReadScope");
+
+// Role-protected (requires 'roles' claim containing 'admin')
+app.MapGet("/admin/metrics", () => new { status = "ok", at = DateTime.UtcNow })
+   .RequireAuthorization("RequireAdminRole");
+
+// Require specific B2C policy (useful when multiple flows exist)
+app.MapGet("/policy-check", (HttpContext ctx) =>
+{
+    var tfp = ctx.User.FindFirst("tfp")?.Value ?? "(none)";
+    return new { effectivePolicy = tfp };
+})
+.RequireAuthorization("RequireSpecificPolicy");
+
+//--------------------------------
+
+
+
 
 
 // Protected by Bearer token + required scope
@@ -163,7 +193,8 @@ app.MapGet("/profile", (HttpContext http) =>
 .RequireAuthorization("ApiScope");
 
 // Protected with role based authorization. 
-app.MapGet("/admin/metrics", () => "ok").RequireAuthorization("RequireAdminRole");
+app.MapGet("/admin/metrics", () => new { status = "ok", at = DateTime.UtcNow })
+   .RequireAuthorization("RequireAdminRole");
 app.MapGet("/reports", () => "ok").RequireAuthorization("RequireApiReadScope");
 
 // ----------------------------------
@@ -217,6 +248,27 @@ app.UseAuthorization();
 app.Run();
 
 #endregion app. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
